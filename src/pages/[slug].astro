@@ -1,0 +1,165 @@
+---
+import Layout from '../Layout.astro';
+import songs from '../data/songs.json';
+
+interface Recording {
+  id: string;
+  name: string;
+  type: string;
+  voice: string | null;
+  url: string;
+  src?: string;
+}
+interface Song {
+  slug: string;
+  title: string;
+  folderId: string;
+  lyrics: string;
+  files: Recording[];
+}
+
+export function getStaticPaths() {
+  return songs.map(song => ({ params: { slug: song.slug }, props: { song } }));
+}
+const { song } = Astro.props as { song: Song };
+const recordings = song.files.filter(file => ['audio', 'video'].includes(file.type));
+const attachments = song.files.filter(file => !['audio', 'video'].includes(file.type));
+const voices = ['Sobreprimos', 'Primos', 'Primos lisos', 'Primos altos', 'Segundos', 'Bajos', 'Coro completo'];
+const groups = [...new Set(recordings.map(file => file.voice || 'Por identificar'))].sort((a,b) => {
+  const rank = (v: string) => v === 'Por identificar' ? 99 : voices.includes(v) ? voices.indexOf(v) : 90;
+  return rank(a) - rank(b);
+});
+const folder = 'https://drive.google.com/drive/folders/' + song.folderId;
+---
+<Layout title={song.title}>
+  <main class="song">
+    <a class="back" href="/">← Volver al repertorio</a>
+    <h1>{song.title}</h1>
+    <nav class="jump" aria-label="Ir a una sección"><a href="#letra">Letra ↓</a><a href="#ensayos">Voces y ensayos ↓</a></nav>
+    <div class="columns">
+      <article id="letra">
+        <h2>Letra</h2>
+        {song.lyrics ? <div class="verses">{song.lyrics.trim().split(/\n\s*\n/).map(verse => <p>{verse}</p>)}</div> :
+          <p class="missing">Letra pendiente de transcripción.</p>}
+        {attachments.length > 0 && <section class="attachments"><h2>Material de la canción</h2>
+          {attachments.map(file => <a href={file.url} target="_blank" rel="noopener">{file.name}<span aria-hidden="true">↗</span></a>)}
+        </section>}
+      </article>
+      <aside id="ensayos" aria-label="Grabaciones">
+        <h2>Voces y ensayos</h2>
+        {recordings.length === 0 && <p>No hay grabaciones en esta carpeta.</p>}
+        {groups.map(group => <section class="group">
+          <h3>{group}</h3>
+          {recordings.filter(file => (file.voice || 'Por identificar') === group).map(file =>
+            <button class="track" data-track data-title={file.name} data-voice={group} data-src={file.src || ''} data-type={file.type} data-link={file.url} data-id={file.id} aria-pressed="false">
+              <span class="play" aria-hidden="true">▶</span><span>{file.name}</span>
+            </button>)}
+        </section>)}
+        <a class="source" href={folder} target="_blank" rel="noopener">Carpeta de Drive ↗</a>
+      </aside>
+    </div>
+    <section class="player" aria-label="Reproductor de ensayo" hidden>
+      <div class="player-heading"><div><small id="current-voice"></small><strong id="current-track" aria-live="polite"></strong></div>
+        <button class="close" aria-label="Cerrar reproductor">×</button></div>
+      <audio controls hidden preload="metadata"></audio>
+      <video controls hidden playsinline preload="metadata"></video>
+      <iframe hidden title="Reproductor de Google Drive" allow="autoplay; fullscreen"></iframe>
+      <div class="transport"><button class="rewind" hidden>↶ 10 s</button><a id="external-player" target="_blank" rel="noopener">Abrir en Drive ↗</a></div>
+    </section>
+  </main>
+</Layout>
+<script>
+function initPlayer() {
+  const player = document.querySelector<HTMLElement>('.player');
+  if (!player || player.dataset.ready) return;
+  player.dataset.ready = 'true';
+  const audio = player.querySelector('audio')!;
+  const video = player.querySelector('video')!;
+  const frame = player.querySelector('iframe')!;
+  const rewind = player.querySelector<HTMLButtonElement>('.rewind')!;
+  const tracks = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-track]'));
+  let active: HTMLMediaElement | null = null;
+  let selected: HTMLButtonElement | null = null;
+  function clear() {
+    for (const element of [audio, video]) {
+      element.onerror = null;
+      element.pause();
+      element.removeAttribute('src');
+      element.load();
+      element.hidden = true;
+    }
+    frame.removeAttribute('src');
+    frame.hidden = rewind.hidden = true;
+    active = null;
+  }
+  function embed(id: string) {
+    frame.src = 'https://drive.google.com/file/d/' + encodeURIComponent(id) + '/preview';
+    frame.hidden = false;
+  }
+  for (const button of tracks) button.addEventListener('click', () => {
+    clear();
+    selected?.setAttribute('aria-pressed', 'false');
+    selected = button;
+    button.setAttribute('aria-pressed', 'true');
+    const { title, voice, src, type, link, id } = button.dataset;
+    player.querySelector('#current-track')!.textContent = title || '';
+    player.querySelector('#current-voice')!.textContent = voice || '';
+    player.querySelector<HTMLAnchorElement>('#external-player')!.href = link!;
+    player.hidden = false;
+    document.body.classList.add('playing');
+    if (!src) { embed(id!); return; }
+    active = type === 'video' ? video : audio;
+    const media = active;
+    media.hidden = rewind.hidden = false;
+    media.onerror = () => { clear(); embed(id!); };
+    media.src = src;
+    media.play().catch(() => {});
+  });
+  rewind.addEventListener('click', () => {
+    if (active && Number.isFinite(active.currentTime)) active.currentTime = Math.max(0, active.currentTime - 10);
+  });
+  player.querySelector('.close')!.addEventListener('click', () => {
+    clear();
+    player.hidden = true;
+    document.body.classList.remove('playing');
+    selected?.setAttribute('aria-pressed', 'false');
+    selected?.focus();
+  });
+}
+initPlayer();
+document.addEventListener('astro:page-load', initPlayer);
+document.addEventListener('astro:before-swap', () => document.body.classList.remove('playing'));
+</script>
+<style>
+.song{max-width:1180px;margin:0 auto;padding:36px clamp(18px,4vw,65px) 96px;color:#142e38}
+.back,.source{font-size:.91rem;text-decoration:none;color:inherit;font-weight:650}
+.back:hover,.source:hover{text-decoration:underline}
+h1{font-family:Georgia,serif;font-size:clamp(3rem,8.5vw,7rem);line-height:.98;letter-spacing:-.055em;margin:36px 0 30px;font-weight:500}
+.columns{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(280px,1fr);gap:clamp(28px,6vw,92px);border-top:2px solid #142e38;padding-top:22px}
+h2{margin:0 0 20px;font-size:1.4rem;line-height:1.2}
+.verses{font:clamp(1.2rem,2.6vw,1.65rem)/1.5 Georgia,serif}
+.verses p{white-space:pre-line;margin:0 0 1.3em}
+.attachments{margin-top:32px}
+.attachments a,.track{display:flex;gap:12px;align-items:center;width:100%;padding:12px 0;border:0;border-bottom:1px solid #142e3844;background:transparent;color:inherit;text-align:left;font:inherit;overflow-wrap:anywhere;text-decoration:none}
+.attachments a span{margin-left:auto}
+aside{align-self:start;padding:22px;background:#e6f0ee;border-top:4px solid #142e38}
+.group{margin-bottom:22px}
+.group h3,.player small{font:700 .76rem/1.4 system-ui;text-transform:uppercase;letter-spacing:.09em}
+.group h3{margin:0}
+.track{cursor:pointer;font-size:.94rem}
+.track:hover,.track[aria-pressed=true]{background:#b9ddec}
+.play{font-size:.8rem}
+.source{display:inline-block;margin-top:12px}
+.player{position:fixed;z-index:20;bottom:12px;left:50%;transform:translateX(-50%);padding:12px 18px;width:min(650px,calc(100% - 20px));max-height:65dvh;overflow:auto;box-sizing:border-box;background:#142e38;color:#faf7ec;box-shadow:0 6px 34px #142e3844;border-radius:10px}
+.player [hidden],.player[hidden]{display:none}
+.player-heading,.transport{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.player strong{display:block;overflow-wrap:anywhere}
+.player button,.player a{color:inherit;font:inherit;background:none;border:0;cursor:pointer}
+.player .close{font-size:1.8rem}
+.player audio,.player video,.player iframe{width:100%;display:block;margin:8px 0;border:0}
+.player video,.player iframe{height:min(22vh,190px)}
+.transport{font-size:.82rem;justify-content:flex-end}
+:global(body.playing){padding-bottom:min(64dvh,350px)}
+.jump{display:none} @media(max-width:720px){.columns{display:flex;flex-direction:column}.song{padding-top:24px}aside{width:100%;box-sizing:border-box}.jump{display:flex;gap:18px;margin:18px 0}.jump a{font-weight:650;color:inherit;text-decoration:none}.player{bottom:4px}}
+</style>
+
