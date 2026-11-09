@@ -1,0 +1,60 @@
+---
+import Layout from '../Layout.astro';
+import SongStyles from './SongStyles.astro';
+import { editPath, isRecording, safeLink, voiceGroups, type Song } from '../lib/catalog';
+interface Props { song?: Song }
+const { song } = Astro.props;
+const attachments = song?.files.filter(file => !isRecording(file)) || [];
+const groups = voiceGroups(song?.files || []);
+---
+<Layout title={song?.title || 'Canción'}>
+  <SongStyles/>
+  <main class="song" data-detail data-slug={song?.slug}>
+    <div class="song-nav"><a class="back" href="/#repertorio">← Volver al repertorio</a>
+      <a class="back" data-edit hidden={!song} href={song && editPath(song.slug)}>Editar canción</a></div>
+    <h1>{song?.title || 'Canción'}</h1>
+    <p data-status role="status" hidden={!!song}>Cargando canción…</p>
+    <nav class="jump" aria-label="Ir a una sección"><a href="#letra">Letra ↓</a><a href="#ensayos">Voces y ensayos ↓</a></nav>
+    <div class="columns" hidden={!song}>
+      <article id="letra">
+        <h2>Letra</h2>
+        <div class="verses" data-verses>
+          {song?.lyrics.trim() ? song.lyrics.trim().split(/\n\s*\n/).map(verse => <p>{verse}</p>) : <p>Letra pendiente de transcripción.</p>}
+        </div>
+        <section class="attachments" hidden={attachments.length === 0}><h2>Material de la canción</h2>
+          <div data-attachments>{attachments.map(file => <a href={safeLink(file.url || file.src)} target="_blank" rel="noopener">{file.name}<span aria-hidden="true">↗</span></a>)}</div>
+        </section>
+      </article>
+      <aside id="ensayos" aria-label="Grabaciones">
+        <h2>Voces y ensayos</h2>
+        <div data-groups>
+          {groups.length === 0 && <p>Todavía no hay grabaciones.</p>}
+          {groups.map(([group,files]) => <section class="group"><h3>{group}</h3>
+            {files.map(file => <button class="track" data-track data-title={file.name} data-voice={group} data-src={safeLink(file.src)} data-type={file.type} data-link={safeLink(file.url)} data-id={file.id} aria-pressed="false">
+              <span class="play" aria-hidden="true">▶</span><span>{file.name}</span></button>)}
+          </section>)}
+        </div>
+        <a class="source" data-folder hidden={!song?.folderId} href={song?.folderId && 'https://drive.google.com/drive/folders/'+encodeURIComponent(song.folderId)} target="_blank" rel="noopener">Carpeta de Drive ↗</a>
+      </aside>
+    </div>
+    <section class="player" aria-label="Reproductor de ensayo" hidden>
+      <div class="player-heading"><div><small id="current-voice"></small><strong id="current-track" aria-live="polite"></strong></div>
+        <button class="close" aria-label="Cerrar reproductor">×</button></div>
+      <audio controls hidden preload="metadata"></audio>
+      <video controls hidden playsinline preload="metadata"></video>
+      <iframe hidden title="Reproductor de Google Drive" allow="autoplay; fullscreen"></iframe>
+      <p data-play-error role="status" hidden>No se pudo reproducir esta pista.</p>
+      <div class="transport"><button class="rewind" hidden>↶ 10 s</button><a id="external-player" target="_blank" rel="noopener"></a></div>
+    </section>
+  </main>
+</Layout>
+<script>
+import { initDetail } from '../lib/detail';
+initDetail();
+document.addEventListener('astro:page-load', initDetail);
+document.addEventListener('astro:before-swap', () => document.body.classList.remove('playing'));
+</script>
+<style is:global>
+.song-nav{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.song [hidden]{display:none!important}
+</style>

@@ -1,0 +1,204 @@
+---
+import Layout from '../Layout.astro';
+---
+<Layout title="Editar el cancionero">
+  <main class="editor" id="editor">
+    <a href="/">← Volver al cancionero</a>
+    <h1 id="editor-title">Nueva canción</h1>
+    <p id="load-status" role="status">Preparando el editor…</p>
+    <form hidden autocomplete="off">
+      <fieldset id="fields">
+        <label for="song-title">Título</label>
+        <input id="song-title" required maxlength="160" />
+        <label for="lyrics">Letra</label>
+        <p class="hint" id="verse-help">Deja una línea en blanco entre estrofas. El comienzo de la letra aparecerá en la portada.</p>
+        <textarea id="lyrics" rows="12" aria-describedby="verse-help"></textarea>
+        <h2>Grabaciones</h2>
+        <div id="recordings"></div>
+        <button type="button" id="add">＋ Añadir grabación</button>
+        <section id="attachments" hidden><h2>Material original</h2><ul></ul></section>
+      </fieldset>
+      <p class="message" id="save-status" role="status"></p>
+      <a hidden id="compare" target="_blank" rel="noopener">Consultar la versión guardada en otra pestaña ↗</a>
+      <button id="save" type="submit">Guardar canción</button>
+    </form>
+    <template id="track-template">
+      <fieldset class="track">
+        <legend></legend>
+        <label>Nombre de la grabación<input class="name" required maxlength="200" /></label>
+        <label class="drive-field">Enlace del archivo de Google Drive<input class="url" type="url" placeholder="https://drive.google.com/file/d/…" /></label>
+        <a class="original" target="_blank" rel="noopener" hidden>Escuchar el archivo ↗</a>
+        <div class="selects">
+          <label>Formato<select class="type"><option value="audio">Audio</option><option value="video">Vídeo</option></select></label>
+          <label>Cuerda<select class="voice">
+            <option value="">Por identificar</option><option>Sobreprimos</option><option>Primos</option><option>Primos lisos</option><option>Primos altos</option><option>Segundos</option><option>Bajos</option><option>Coro completo</option>
+          </select></label>
+        </div>
+        <button type="button" class="discard" hidden>Quitar esta grabación nueva</button>
+      </fieldset>
+    </template>
+  </main>
+</Layout>
+<script>
+interface Recording {
+  id: string; name: string; url: string; type: string; voice: string | null; src?: string;
+}
+interface Song {
+  slug: string; title: string; lyrics: string; folderId: string; files: Recording[];
+}
+function driveFile(value: string) {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.hostname !== 'drive.google.com') return null;
+    const match = url.pathname.match(/^\/file\/d\/([\w-]+)(?:\/|$)/);
+    const id = match?.[1] ?? (url.pathname === '/open' ? url.searchParams.get('id') : null);
+    return id && /^[\w-]+$/.test(id) ? id : null;
+  } catch { return null; }
+}
+async function startEditor() {
+  const root = document.querySelector<HTMLElement>('#editor');
+  if (!root || root.dataset.ready) return;
+  root.dataset.ready = 'true';
+  const q = <T extends HTMLElement>(selector: string) => root.querySelector<T>(selector)!;
+  const form = q<HTMLFormElement>('form');
+  const fields = q<HTMLFieldSetElement>('#fields');
+  const title = q<HTMLInputElement>('#song-title');
+  const lyrics = q<HTMLTextAreaElement>('#lyrics');
+  const load = q('#load-status'), status = q('#save-status');
+  const slug = new URLSearchParams(location.search).get('cancion');
+  const endpoint = '/api/songs' + (slug ? '/' + encodeURIComponent(slug) : '');
+  let song: Song = { slug: '', title: '', lyrics: '', folderId: '', files: [] };
+  let revision: number | null = null;
+  let busy = false;
+  const records = new Map<HTMLElement, Recording | undefined>();
+  function addTrack(file?: Recording) {
+    const track = q<HTMLTemplateElement>('#track-template').content.firstElementChild!.cloneNode(true) as HTMLElement;
+    const input = track.querySelector<HTMLInputElement>('.name')!;
+    const url = track.querySelector<HTMLInputElement>('.url')!;
+    const format = track.querySelector<HTMLSelectElement>('.type')!;
+    const voice = track.querySelector<HTMLSelectElement>('.voice')!;
+    const discard = track.querySelector<HTMLButtonElement>('.discard')!;
+    url.required = !file;
+    url.addEventListener('input', () => url.setCustomValidity(''));
+    track.querySelector('legend')!.textContent = file?.name || 'Nueva grabación';
+    if (file) {
+      input.value = file.name;
+      format.value = file.type;
+      if (file.voice && !Array.from(voice.options).some(option => option.value === file.voice))
+        voice.add(new Option(file.voice, file.voice));
+      voice.value = file.voice || '';
+      track.querySelector<HTMLElement>('.drive-field')!.hidden = true;
+      const original = track.querySelector<HTMLAnchorElement>('.original')!;
+      original.href = file.src || file.url;
+      original.hidden = false;
+    } else {
+      discard.hidden = false;
+      discard.addEventListener('click', () => {
+        records.delete(track); track.remove(); q('#add').focus();
+      });
+    }
+    q('#recordings').append(track);
+    records.set(track, file);
+    if (!file) input.focus();
+  }
+  if (slug) {
+    q('#editor-title').textContent = 'Editar canción';
+    try {
+      const response = await fetch(endpoint, {cache: 'no-store'});
+      if (!response.ok) throw new Error(response.status === 404 ? 'Esta canción no existe.' : 'No se pudo abrir la canción. Vuelve a intentarlo.');
+      const result = await response.json();
+      song = result.song;
+      revision = result.revision;
+    } catch (error) {
+      load.textContent = error instanceof Error ? error.message : 'No se pudo cargar la canción.';
+      return;
+    }
+  }
+  title.value = song.title;
+  lyrics.value = song.lyrics;
+  const attachments = song.files.filter(file => !['audio','video'].includes(file.type));
+  for (const file of song.files) {
+    if (!attachments.includes(file)) { addTrack(file); continue; }
+    const item = document.createElement('li'), link = document.createElement('a');
+    link.href = file.url;
+    link.textContent = file.name;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    item.append(link); q('#attachments ul').append(item);
+  }
+  q('#attachments').hidden = attachments.length === 0;
+  q('#add').addEventListener('click', () => addTrack());
+  form.hidden = false; load.hidden = true;
+  title.addEventListener('input', () => title.setCustomValidity(''));
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    if (busy) return;
+    if (!title.value.trim()) { title.setCustomValidity('Escribe el título de la canción.'); title.reportValidity(); return; }
+    const files = [...song.files];
+    for (const [track, original] of records) {
+      const name = track.querySelector<HTMLInputElement>('.name')!;
+      if (!name.value.trim()) { name.focus(); status.textContent = 'Escribe el nombre de la grabación.'; return; }
+      const type = track.querySelector<HTMLSelectElement>('.type')!.value;
+      const voice = track.querySelector<HTMLSelectElement>('.voice')!.value || null;
+      const info = { name: name.value.trim(), type, voice };
+      if (original) {
+        files[files.indexOf(original)] = { ...original, ...info };
+      } else {
+        const url = track.querySelector<HTMLInputElement>('.url')!;
+        const id = driveFile(url.value);
+        if (!id || files.some(file => file.id === id)) {
+          url.setCustomValidity(id ? 'Esta grabación ya está en la canción.' : 'Pega el enlace de un archivo de Google Drive.');
+          url.reportValidity(); return;
+        }
+        files.push({ ...info, id, url: url.value.trim() });
+      }
+    }
+    busy = true; fields.disabled = true; q<HTMLButtonElement>('#save').disabled = true;
+    status.textContent = 'Guardando…';
+    try {
+      const response = await fetch(endpoint, {
+        method: slug ? 'PUT' : 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ song: { ...song, title: title.value.trim(), lyrics: lyrics.value, files }, revision })
+      });
+      if (response.status === 409 && slug) {
+        const compare = q<HTMLAnchorElement>('#compare');
+        compare.href = location.href; compare.hidden = false;
+        throw new Error('Alguien guardó cambios mientras editabas. Tu borrador sigue aquí. Abre la versión actual en otra pestaña y combina allí los cambios.');
+      }
+      if (!response.ok) {
+        let message = response.status === 409 ? 'Ya hay una canción con este título.' : 'No se pudo guardar. Tu borrador sigue aquí.';
+        const error = await response.json().catch(() => null);
+        if (typeof error?.error === 'string') message += ' ' + error.error;
+        throw new Error(message);
+      }
+      const result = await response.json();
+      status.textContent = 'Canción guardada.';
+      location.assign('/' + encodeURIComponent(result.slug) + '/');
+    } catch (error) {
+      status.textContent = error instanceof Error ? error.message : 'No se pudo guardar. Tu borrador sigue aquí.';
+      busy = false; fields.disabled = false; q<HTMLButtonElement>('#save').disabled = false;
+    }
+  });
+}
+document.addEventListener('astro:page-load', startEditor);
+startEditor();
+</script>
+<style>
+.editor{max-width:800px;margin:auto;padding:34px max(5vw,20px) 0}
+nav,.selects{display:flex;justify-content:space-between;gap:18px}nav{font-size:.95rem}
+h1{font:normal clamp(3rem,8vw,6rem)/1 Georgia,serif;letter-spacing:-.055em;margin:35px 0}
+h2{margin:30px 0 15px;font:normal 2rem Georgia,serif}
+fieldset{border:none;padding:0;margin:0;min-width:0}label{display:block;font-weight:650}
+input,textarea,select{display:block;width:100%;padding:10px 12px;border:1px solid #76878a;border-radius:4px;background:#fffdf5;color:inherit}
+input,select{margin:5px 0 18px}textarea{font:1.12rem/1.45 Georgia,serif;resize:vertical}
+textarea:focus-visible{outline:3px solid #13758c;outline-offset:3px}
+.hint,.message{line-height:1.5}.hint{margin:5px 0 12px;font-size:.94rem}
+.track{padding:18px 20px 6px;background:#e6f0ee;border:1px solid #8eaaa9;margin:14px 0 24px}
+.track legend{padding:3px 8px;background:#e6f0ee;font-size:.9rem;font-weight:bold;overflow-wrap:anywhere;max-width:100%}
+.selects label{flex:1;min-width:0}.original{display:inline-block;margin-bottom:16px}
+button{padding:10px 16px;border:1px solid var(--ink);background:transparent;color:var(--ink);cursor:pointer;border-radius:4px}button:disabled{opacity:.6;cursor:wait}
+.discard{margin:0 0 12px}#save{color:var(--paper);background:var(--ink);display:block;margin-top:14px}
+[hidden]{display:none!important}ul{padding-left:18px;line-height:1.6;overflow-wrap:anywhere}
+@media(max-width:520px){.selects{display:block}.track{padding:14px 12px 4px}}
+</style>
+

@@ -1,0 +1,39 @@
+---
+import Layout from '../Layout.astro';
+---
+<Layout title="Guía del cancionero">
+  <main class="guide">
+    <a href="/">← Volver al cancionero</a>
+    <h1>Guía del cancionero</h1>
+    <section>
+      <h2>Entrar con la murga</h2>
+      <p>La persona propietaria del sitio gestiona la lista de acceso en la configuración de uso compartido. Para invitar a alguien, añade su cuenta a esa lista y envíale el enlace del cancionero. Cada integrante entra con su cuenta autorizada y puede editar desde la propia web.</p>
+    </section>
+    <section>
+      <h2>Añadir o editar una canción</h2>
+      <p>Elige <a href="/editar/">Añadir canción</a> para crear una ficha. Para corregir una existente, abre su tarjeta en la portada y pulsa <strong>Editar canción</strong>. Escribe el título y la letra. Una línea en blanco separa dos estrofas.</p>
+      <p>Pulsa <strong>Guardar canción</strong> para compartir los cambios. El inicio de la letra aparecerá también en la tarjeta del repertorio.</p>
+    </section>
+    <section>
+      <h2>Preparar las grabaciones</h2>
+      <p>Sube el audio o vídeo a Drive y, desde el archivo, usa <strong>Compartir → Copiar enlace</strong>. Comprueba que las cuentas de los integrantes tienen permiso para abrirlo. La lista de acceso del cancionero y los permisos del archivo se gestionan por separado.</p>
+      <p>En el editor, pulsa <strong>Añadir grabación</strong>, escribe un nombre reconocible, pega el enlace del archivo y elige el formato y la cuerda. Puedes asignar sobreprimos, primos, primos lisos, primos altos, segundos, bajos o coro completo. Usa <strong>Por identificar</strong> si todavía falta reconocer la voz.</p>
+      <p>Para clasificar una grabación existente, cambia su cuerda y guarda. Puedes escuchar el archivo desde el editor. Las imágenes y documentos asociados se encuentran en <strong>Material original</strong>.</p>
+    </section>
+    <section>
+      <h2>Si dos personas editan a la vez</h2>
+      <p>Si aparece un aviso de conflicto, deja abierta la pestaña con tu borrador. Pulsa el enlace para consultar la versión guardada en otra pestaña. Copia allí tus cambios, comprueba los de la otra persona y guarda la versión combinada.</p>
+    </section>
+    <section>
+      <h2>Comprobar el resultado</h2>
+      <p>Vuelve a la portada, busca una frase de la letra y abre la canción. Revisa las estrofas en el móvil y reproduce una pista de cada cuerda que hayas añadido. Pide a otra persona de la murga que pruebe con su propia cuenta para comprobar también los permisos de Drive.</p>
+    </section>
+  </main>
+</Layout>
+<style>
+.guide{max-width:820px;margin:auto;padding:36px max(5vw,20px) 0}.guide>a{font-size:.95rem}
+h1{font:normal clamp(3rem,8vw,6rem)/1 Georgia,serif;letter-spacing:-.055em;margin:35px 0}
+section{padding:24px 0;border-top:1px solid #142e3844}
+h2{font:normal clamp(1.7rem,4.2vw,2.4rem)/1.1 Georgia,serif;margin:0 0 12px}
+p{line-height:1.65;margin:0 0 .75em}p:last-child{margin-bottom:0}
+</style>

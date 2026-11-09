@@ -1,23 +1,74 @@
 ---
 import Layout from '../Layout.astro';
 import songs from '../data/songs.json';
+import {songPath, versePreview, recordingCountLabel} from '../lib/catalog';
 ---
-<Layout title="Cancionero"><main><section class="hero"><div><p class="eyebrow">Murga uruguaya</p><h1>Siempre<br/><em>Celeste</em></h1></div><figure><img src="/murga.webp" alt="La murga Siempre Celeste cantando en Cambrils"/><figcaption>Cambrils · 2025</figcaption></figure></section>
-<section id="repertorio"><div class="heading"><h2>Cancionero</h2><label><span aria-hidden="true">⌕</span><input type="search" aria-label="Buscar por canción o letra" placeholder="Buscar canción o verso"/></label></div>
-<div class="grid">{songs.map(song=><a class="card" data-search={song.title+' '+song.lyrics} data-astro-prefetch href={'/'+song.slug+'/'}><div class="cardtop"><span>{song.files.filter(file => ['audio','video'].includes(file.type)).length} grabaciones</span><span aria-hidden="true">↗</span></div><h3>{song.title}</h3>{song.lyrics && <p>{song.lyrics.trim().split(/\n/).filter(Boolean).slice(0,3).join('\n')}</p>}<div class="cardfoot">Abrir canción <span aria-hidden="true">→</span></div></a>)}</div><p id="empty" hidden>No hay canciones que coincidan con la búsqueda.</p></section></main></Layout>
+<Layout title="Cancionero">
+<main data-library>
+  <section class="hero"><div><p class="eyebrow">Murga uruguaya</p><h1>Siempre<br/><em>Celeste</em></h1></div>
+    <figure><img src="/murga.webp" alt="La murga Siempre Celeste cantando en Cambrils"/><figcaption>Cambrils · 2025</figcaption></figure>
+  </section>
+  <section id="repertorio">
+    <div class="heading"><h2>Cancionero</h2><label><span aria-hidden="true">⌕</span><input type="search" aria-label="Buscar por canción o letra" placeholder="Buscar canción o verso"/></label></div>
+    <div class="grid">
+      {songs.map(song => <a class="card" data-search={song.title+' '+song.lyrics} href={songPath(song.slug)}>
+        <div class="cardtop"><span>{recordingCountLabel(song)}</span><span aria-hidden="true">↗</span></div>
+        <h3>{song.title}</h3><p hidden={!song.lyrics}>{versePreview(song)}</p>
+        <div class="cardfoot">Abrir canción <span aria-hidden="true">→</span></div>
+      </a>)}
+    </div>
+    <template data-card-template>
+      <a class="card"><div class="cardtop"><span></span><span aria-hidden="true">↗</span></div><h3></h3><p></p><div class="cardfoot">Abrir canción <span aria-hidden="true">→</span></div></a>
+    </template>
+    <p id="empty" role="status" hidden>No hay canciones que coincidan con la búsqueda.</p>
+  </section>
+</main></Layout>
 <script>
-document.addEventListener('astro:page-load',()=>{
- const input=document.querySelector<HTMLInputElement>('input[type=search]');
- if(!input)return;
- const normalize=(s:string)=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
- input.addEventListener('input',()=>{
-  let count=0;
-  document.querySelectorAll<HTMLElement>('[data-search]').forEach(card=>{card.hidden=!normalize(card.dataset.search||'').includes(normalize(input.value.trim()));if(!card.hidden)count++});
-  document.getElementById('empty')!.hidden=count!==0;
- });
-});
+import {songPath, versePreview, recordingCountLabel, type Song} from '../lib/catalog';
+async function initLibrary() {
+  const main = document.querySelector<HTMLElement>('[data-library]');
+  if (!main || main.dataset.ready) return;
+  main.dataset.ready = 'true';
+  const grid = main.querySelector('.grid')!;
+  const template = main.querySelector<HTMLTemplateElement>('[data-card-template]')!;
+  const input = main.querySelector<HTMLInputElement>('input[type=search]')!;
+  const normalize = (s:string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+  function filter() {
+    const query = normalize(input.value.trim());
+    let count = 0;
+    grid.querySelectorAll<HTMLElement>('[data-search]').forEach(card => {
+      card.hidden = !normalize(card.dataset.search || '').includes(query);
+      if (!card.hidden) count++;
+    });
+    main!.querySelector<HTMLElement>('#empty')!.hidden = count !== 0;
+  }
+  input.addEventListener('input', filter);
+  try {
+    const response = await fetch('/api/songs', {cache:'no-store'});
+    if (!response.ok) return;
+    const catalog = await response.json() as Song[];
+    if (!main.isConnected) return;
+    grid.replaceChildren(...catalog.map(song => {
+      const card = template.content.firstElementChild!.cloneNode(true) as HTMLAnchorElement;
+      card.href = songPath(song.slug);
+      card.dataset.search = song.title + ' ' + song.lyrics;
+      card.querySelector('.cardtop span')!.textContent = recordingCountLabel(song);
+      card.querySelector('h3')!.textContent = song.title;
+      const verse = card.querySelector('p')!;
+      verse.hidden = !song.lyrics.trim();
+      verse.textContent = versePreview(song);
+      return card;
+    }));
+    filter();
+  } catch { /* The static repertoire remains readable when offline. */ }
+}
+initLibrary();
+document.addEventListener('astro:page-load', initLibrary);
 </script>
 <style>
 main{max-width:1550px;margin:auto;padding:0 max(5vw,20px)}.hero{display:grid;grid-template-columns:.9fr 1.1fr;align-items:center;gap:5vw;padding:clamp(30px,4vw,68px) 0;border-bottom:1px solid var(--ink)}.eyebrow,.cardtop,.cardfoot,figcaption{font-size:12px;letter-spacing:.1em;text-transform:uppercase}.hero h1{font:normal clamp(76px,8.4vw,146px)/.84 Georgia,serif;letter-spacing:-.075em;margin:25px 0}.hero h1 em{color:#316c81}.hero figure{margin:0}.hero img{display:block;width:100%;height:clamp(220px,23vw,355px);object-fit:cover}.hero figcaption{text-align:right;margin-top:8px;font-size:10px}.heading{display:flex;justify-content:space-between;align-items:center;gap:16px;margin:34px 0 22px}.heading h2{font:normal clamp(38px,4.4vw,70px)/1 Georgia,serif;letter-spacing:-.06em;margin:0}.heading label{border:1px solid #70828a;border-radius:28px;padding:9px 16px;display:flex;align-items:center;gap:8px}.heading label span{font-size:24px}.heading input{border:0;background:none;width:175px;color:inherit;min-width:0}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.card{padding:24px;min-height:265px;background:#bdddea;display:flex;flex-direction:column;text-decoration:none;border-top:4px solid var(--ink);transition:transform .18s}.card:hover{transform:translateY(-3px)}.card:nth-child(3n+2){background:#f0d6a6}.card:nth-child(3n){background:#d4decc}.cardtop,.cardfoot{display:flex;justify-content:space-between;align-items:center}.cardtop span:last-child{font-size:20px}.card h3{font:normal clamp(28px,2.8vw,46px)/1 Georgia,serif;letter-spacing:-.045em;margin:20px 0 12px}.card p{white-space:pre-line;font:italic 18px/1.4 Georgia,serif;margin:0 0 24px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}.cardfoot{margin-top:auto;padding-top:12px;border-top:1px solid #142e3844;font-size:10px}.card[hidden]{display:none}@media(max-width:800px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:580px){.hero{grid-template-columns:1fr;gap:12px}.hero h1{font-size:76px}.hero img{height:150px}.heading{align-items:flex-start;flex-direction:column}.grid{grid-template-columns:1fr}.card{min-height:205px}.heading label{width:100%}.heading input{width:100%}}
-</style>
+.actions{display:flex;align-items:center;flex-wrap:wrap;gap:20px;margin:0 0 22px;font-size:.9rem;font-weight:650}.actions a{text-underline-offset:3px}.card p[hidden]{display:none}</style>
+
+
+
 
