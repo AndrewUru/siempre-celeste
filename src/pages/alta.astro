@@ -1,0 +1,34 @@
+---
+import Layout from '../Layout.astro';
+---
+<Layout title="Solicitar alta">
+  <main>
+    <a href="/">← Volver al cancionero</a>
+    <h1>Solicitar alta</h1>
+    <p>Indica el correo con el que quieres participar. Se abrirá tu aplicación de correo con la solicitud preparada. Pulsa «Enviar» allí para que podamos revisar tu alta.</p>
+    <form method="post" action="mailto:atobio459@gmail.com?subject=Solicitud%20de%20alta%20en%20Siempre%20Celeste" enctype="text/plain" data-alta>
+      <label for="correo">Tu correo electrónico</label>
+      <input id="correo" name="correo" type="email" autocomplete="email" required maxlength="254" placeholder="nombre@ejemplo.com"/>
+      <button>Preparar correo</button>
+    </form>
+    <p class="ayuda">Si tu aplicación no se abre, envía tu solicitud a <a href="mailto:atobio459@gmail.com">atobio459@gmail.com</a>.</p>
+  </main>
+</Layout>
+<script>
+  document.addEventListener('submit', event => {
+    const form = event.target;
+    if (!(form instanceof HTMLFormElement) || !form.matches('[data-alta]')) return;
+    event.preventDefault();
+    const correo = String(new FormData(form).get('correo')).trim();
+    const body = 'Hola, quisiera darme de alta en Siempre Celeste.\n\nMi correo de participante es ' + correo + '.';
+    window.location.href = form.action + '&body=' + encodeURIComponent(body);
+  });
+</script>
+<style>
+  main{max-width:38rem;margin:clamp(2rem,7vw,5rem) auto;padding:0 1.25rem}
+  h1{font:normal clamp(3rem,8vw,5rem)/1 Georgia,serif;margin:2rem 0 1rem}
+  p{line-height:1.55}form{display:grid;gap:.75rem;margin:2rem 0}
+  label{font-weight:600}input{padding:.85rem;border:1px solid var(--ink);border-radius:.4rem;background:white}
+  button{justify-self:start;padding:.8rem 1.3rem;background:var(--ink);color:var(--paper);border:0;border-radius:2rem;cursor:pointer}
+  .ayuda{font-size:.9rem}
+</style>
