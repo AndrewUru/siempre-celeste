@@ -1,0 +1,11 @@
+{
+  "framework": null,
+  "buildCommand": "npm run build && node scripts/build-vercel-data.mjs",
+  "outputDirectory": "dist/client",
+  "cleanUrls": true,
+  "trailingSlash": false,
+  "rewrites": [
+    { "source": "/api/songs", "destination": "/data/songs.json" },
+    { "source": "/api/songs/:slug", "destination": "/data/:slug.json" }
+  ]
+}

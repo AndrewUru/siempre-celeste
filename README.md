@@ -45,6 +45,5 @@ npm run preview
 
 1. Edita [songs.json](src/data/songs.json). Conserva el identificador `slug` de las fichas existentes para que sus enlaces sigan funcionando.
 2. Ejecuta `npm run build`. Astro genera las páginas en `dist/client`. El proceso también prepara el Worker en `dist/server`.
-3. Guarda los cambios en Git y súbelos a la rama `main`. La versión de Vercel documentada aquí se publicó manualmente.
-4. Para repetir ese despliegue, copia el contenido de `dist/client` al directorio de publicación vinculado al proyecto `siempre-celeste`. Actualiza también `data/songs.json` con el catálogo completo y `data/<slug>.json` con un objeto `{"song": …, "revision": 0}` por ficha. El directorio de publicación tiene su propio `vercel.json`, que dirige `/api/songs` y `/api/songs/:slug` a esos archivos.
-5. Desde ese directorio vinculado, ejecuta `vercel deploy --prod --scope andrewurus-projects`. Comprueba la portada, una ficha modificada y el formulario de alta en la URL pública.
+3. Guarda los cambios en Git y súbelos a la rama `main`. Vercel compila el repositorio conectado usando [vercel.json](vercel.json), genera los JSON de consulta y publica el contenido de `dist/client`.
+4. Cuando termine el despliegue, comprueba la portada, una ficha modificada y el formulario de alta en la URL pública.
